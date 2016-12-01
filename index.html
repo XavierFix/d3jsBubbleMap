@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Campaign Dashboard</title>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"/>
+        <link href="./static/css/camp.css" rel="stylesheet"/>
+        
+    </head>
+    <body>
+        <header class="container">
+            <div class="row">
+                <div class="col-sm-12">
+                    <h2>Campaign Dashboard</h2>
+                </div>
+            </div>
+        </header>   
+
+        <section class="container">
+            <div class="row">
+                <div class="col-sm-6">
+                    <h3>Costs by Campaign</h3>
+                    <div class="chart-stage">
+                        <div id="camp-chart"></div> 
+                    </div>
+                </div>  
+                <div class="col-sm-6">
+                    <h3>Costs by Month</h3>
+                    <div class="chart-stage">
+                        <div id="time-chart"></div>
+                    </div>
+                </div>          
+                <div class="col-sm-3">
+                    <h3>Total Costs</h3>
+                    <div class="chart-stage">
+                        <div id="total"></div>
+                    </div>
+                </div>            
+            </div>
+        </section>
+
+        <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script> 
+        <script src="./static/lib/crossfilter.js"></script>
+        <script src="./static/lib/keen.min.js"></script>
+        <script src="./static/lib/dc.js"></script>
+        <script src="./static/lib/queue.js"></script>
+        <script sur="./static/lib/jquery.min.js"></script>
+        <script>
+            //var format = d3.time.format("%m/%Y");
+            //console.log(format.parse("9/2016"));
+            queue().defer(d3.json, "/test/camp2")
+                   .await(makeGraphs);
+
+            function makeGraphs(error,projectsJson) {
+                var camp = projectsJson;
+                var dateFormat = d3.time.format("%m/%Y");
+                camp.forEach(function(d) {
+                    d["Month"] = dateFormat.parse(d["Month"]);
+                })
+               
+                
+                var ndx = crossfilter(camp);
+                
+                var dateDim = ndx.dimension(function(d) {return d["Month"];});
+                
+                //var costDime = ndx.dimension(function(d) {return d["Cost"];});
+                var campDim = ndx.dimension(function(d) { return d["Campaign"];});
+                var costDim = ndx.dimension(function(d) { return d["Cost"];});
+
+                var minDate = dateDim.bottom(1)[0]["Month"];
+                console.log(minDate);
+                var maxDate = dateDim.top(1)[0]["Month"];
+                console.log(maxDate);
+
+                var numProjectsByDate = dateDim.group();
+                var costByCamp = campDim.group();
+                var all = ndx.groupAll();
+                var totalCost = ndx.groupAll().reduceSum(function(d){return d["Cost"];});
+                var costByDate = dateDim.group().reduceSum(function(d){
+                    return d.Cost;
+                });
+                console.log(costByDate.top(5));
+
+                var linear = d3.scale.linear()
+                                .domain([0,costByDate.top(1)[0].value])
+                                .range([0,500]);
+
+                var timeChart = dc.barChart("#time-chart");
+                timeChart.width(600)
+                         .height(350)
+                         .margins({top:10,right:70,bottom:30,left:70})
+                         .dimension(dateDim)
+                         .group(numProjectsByDate)
+                         .colors(["steelblue"])
+                         .x(d3.time.scale().domain([minDate,maxDate]))
+                         .elasticY(true)
+                         .xAxisLabel("Month")
+                         .yAxis().ticks(4);
+
+                var campChart = dc.rowChart("#camp-chart");
+                campChart.width(600)
+                         .height(450)
+                         .dimension(campDim)
+                         .group(costByCamp)
+                         .xAxis().ticks(5);
+
+                var tot = dc.numberDisplay("#total");
+                tot.formatNumber(d3.format("d"))
+                   .valueAccessor(function(d){return d;})
+                   .group(all);
+                
+                   
+
+                dc.renderAll();         
+            };       
+        </script>                     
+
+        
+    </body>        
+</html>    
